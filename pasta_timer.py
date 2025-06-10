@@ -620,8 +620,22 @@ class CLIInterface(TimerObserver):
         """Handle timer tick events"""
         timer_display = f"{event.minutes:02d}:{event.seconds:02d}"
         self._clear_screen()
+        # Find total_seconds for this timer
+        pasta_info = self.pasta_db.get_pasta_info(event.pasta_type)
+        if pasta_info:
+            # Try to get the original total_seconds (for custom times, fallback to event.remaining_seconds + elapsed)
+            total_seconds = getattr(self, '_current_total_seconds', event.remaining_seconds + 1)
+        else:
+            total_seconds = event.remaining_seconds + 1
+
+        # Store total_seconds for next tick if not already set
+        if not hasattr(self, '_current_total_seconds'):
+            self._current_total_seconds = total_seconds
+
+        progress_bar = self._render_progress_bar(self._current_total_seconds, event.remaining_seconds)
         print(f"🍝 Cooking {event.pasta_type.title()}")
         print(f"⏰ Time remaining: {timer_display}")
+        print(progress_bar)
         print(f"💡 {self.current_fact}")
         print("Press Ctrl+C to cancel")
     
@@ -639,10 +653,16 @@ class CLIInterface(TimerObserver):
             print("🔔 Sound notification played!")
         else:
             print("(Install 'playsound3' for sound notifications)")
+        
+        if hasattr(self, '_current_total_seconds'):
+            del self._current_total_seconds
     
     def on_timer_cancelled(self, event: TimerEvent) -> None:
         """Handle timer cancellation"""
         print("\n\n⏹️  Timer cancelled. Happy cooking! 👋")
+        
+        if hasattr(self, '_current_total_seconds'):
+            del self._current_total_seconds
     
     def _clear_screen(self) -> None:
         """Clear the terminal screen"""
@@ -671,6 +691,13 @@ class CLIInterface(TimerObserver):
         timer = PastaTimer(pasta_type, minutes, self.debug_mode)
         timer.add_observer(self)
         timer.start()
+
+    def _render_progress_bar(self, total_seconds: int, remaining_seconds: int, bar_length: int = 30) -> str:
+        elapsed = total_seconds - remaining_seconds
+        percent = elapsed / total_seconds if total_seconds else 0
+        filled_length = int(bar_length * percent)
+        bar = '█' * filled_length + '-' * (bar_length - filled_length)
+        return f"[{bar}] {int(percent * 100):3d}%"
 
 class PastaTimerApp:
     """Main application class that orchestrates the pasta timer"""
