@@ -36,6 +36,25 @@ fun_facts = [
     "Tip: Pair pasta shapes with the right sauce for best results."
 ]
 
+class PastaTimer:
+    def __init__(self, minutes, on_tick=None, on_finish=None, debug_mode=False):
+        self.minutes = minutes
+        self.on_tick = on_tick
+        self.on_finish = on_finish
+        self.debug_mode = debug_mode
+
+    def start(self):
+        total_seconds = int(self.minutes * 60)
+        if self.debug_mode:
+            total_seconds = 6
+        for remaining in range(total_seconds, 0, -1):
+            mins, secs = divmod(remaining, 60)
+            if self.on_tick:
+                self.on_tick(mins, secs, remaining)
+            time.sleep(1)
+        if self.on_finish:
+            self.on_finish()
+
 def display_pasta_options():
     """Display all available pasta types and their cooking time ranges"""
     print("\n🍝 Available Pasta Types:")
@@ -75,35 +94,38 @@ def get_cooking_time(pasta_type):
         except ValueError:
             print("Please enter a valid number!")
 
-def run_timer(pasta_type, minutes):
-    """Run the countdown timer with fun facts and sound notification"""
+def cli_run_timer(pasta_type, minutes):
+    """Run the countdown timer with fun facts and sound notification (CLI version)"""
+    fact = random.choice(fun_facts)
     print(f"\n🔥 Starting timer for {pasta_type.title()}")
     print(f"⏰ Cooking time: {minutes} minutes")
     print("Timer starting in 3 seconds...")
     time.sleep(3)
-    total_seconds = int(minutes * 60)
-    fact = random.choice(fun_facts)
-    for remaining in range(total_seconds, 0, -1):
-        mins, secs = divmod(remaining, 60)
+
+    def on_tick(mins, secs, remaining):
         timer_display = f"{mins:02d}:{secs:02d}"
         os.system('cls' if os.name == 'nt' else 'clear')
         print(f"🍝 Cooking {pasta_type.title()}")
         print(f"⏰ Time remaining: {timer_display}")
         print(f"💡 {fact}")
         print("Press Ctrl+C to cancel")
-        time.sleep(1)
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("🎉 TIME'S UP! 🎉")
-    print(f"Your {pasta_type} is ready!")
-    print("Remember to taste test before serving! 👨‍🍳")
-    # Play sound notification if available
-    if SOUND_AVAILABLE:
-        try:
-            playsound('alarm.mp3')
-        except Exception:
-            print("(Sound notification failed.")
-    else:
-        print("(Install 'playsound' for sound notification.)")
+
+    def on_finish():
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("🎉 TIME'S UP! 🎉")
+        print(f"Your {pasta_type} is ready!")
+        print("Remember to taste test before serving! 👨‍🍳")
+        # Play sound notification if available
+        if SOUND_AVAILABLE:
+            try:
+                playsound('alarm.mp3')
+            except Exception:
+                print("(Sound notification failed.")
+        else:
+            print("(Install 'playsound' for sound notification.)")
+
+    timer = PastaTimer(minutes, on_tick=on_tick, on_finish=on_finish, debug_mode=DEBUG_MODE)
+    timer.start()
 
 def prompt_restart():
     """Ask the user if they want to restart or exit."""
@@ -125,7 +147,7 @@ def main():
             display_pasta_options()
             selected_pasta = get_user_choice()
             cooking_time = get_cooking_time(selected_pasta)
-            run_timer(selected_pasta, cooking_time)
+            cli_run_timer(selected_pasta, cooking_time)
             if not prompt_restart():
                 break
         except KeyboardInterrupt:
