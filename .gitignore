@@ -109,3 +109,7 @@ dmypy.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# User created data
+custom_pasta.json
+custom_pasta.json.backup
