@@ -62,12 +62,22 @@ python pasta_timer.py --version    # Show version
 - `--help, -h`: Show help message and available options
 - `--version, -v`: Display the application version
 
-### Web Version (Streamlit):
+### Web Version (Streamlit GUI):
 ```bash
 streamlit run streamlit_app.py
 ```
 
 The web version will automatically open in your browser at `http://localhost:8501`
+
+**Web GUI Features:**
+- 🔥 **Start Timer**: Select pasta type and cooking time with an intuitive interface
+- 🕐 **Active Timers**: View all running timers with progress bars and controls
+- ⭐ **Custom Pasta**: Add and manage your own pasta types
+- 📊 **Statistics**: Real-time stats in the sidebar
+- 💡 **Pasta Facts**: Learn interesting pasta facts while you cook
+- 🔧 **Debug Mode**: Quick 6-second timers for testing
+- 🔄 **Live Updates**: Automatic refresh to show timer progress
+- 🎉 **Notifications**: Visual and audio alerts when timers finish
 
 ## 🛑 When You're Done
 
@@ -99,9 +109,17 @@ deactivate
 ```
 pasta-timer/
 ├── pasta_timer.py         # Command line version
-├── streamlit_app.py       # Web version (if created)
+├── streamlit_app.py       # Web GUI version
+├── timer.py               # Core timer functionality
+├── cli_interface.py       # Command line interface
+├── pasta_database.py      # Pasta types and database
+├── models.py              # Data models
+├── storage.py             # Data persistence
+├── validators.py          # Input validation
+├── custom_pasta.json      # Custom pasta types storage
 ├── alarm.mp3              # Alarm sound file
 ├── requirements.txt       # List of required packages
+├── tests/                 # Test files
 ├── .gitignore             # Files to ignore in git
 ├── README.md              # This file!
 └── pasta_timer_env/       # Virtual environment (don't touch!)
