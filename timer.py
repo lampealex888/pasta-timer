@@ -2,6 +2,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict
 import threading
+import multiprocessing
 from datetime import datetime, timedelta
 
 from models import TimerState, TimerEvent
@@ -276,19 +277,30 @@ class TimerManager:
 
 
 class SoundNotifier:
-    """Handles sound notifications"""
+    """Handles sound notifications using multiprocessing for better control"""
     
     def __init__(self, sound_file: str = "alarm.mp3"):
         self.sound_file = sound_file
         self.enabled = SOUND_AVAILABLE
+        self.sound_process = None
     
     def play_notification(self) -> bool:
-        """Play notification sound. Returns True if successful."""
+        """Play notification sound in a separate process. Returns True if successful."""
         if not self.enabled:
             return False
         
         try:
-            playsound(self.sound_file)
+            # Stop any currently playing sound
+            self.stop_notification()
+            # Start new sound process
+            self.sound_process = multiprocessing.Process(target=playsound, args=(self.sound_file,))
+            self.sound_process.start()
             return True
         except Exception:
             return False
+    
+    def stop_notification(self) -> None:
+        """Stop the currently playing notification sound."""
+        if self.sound_process and self.sound_process.is_alive():
+            self.sound_process.terminate()
+            self.sound_process.join(timeout=1.0)  # Wait up to 1 second for clean termination

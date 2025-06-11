@@ -81,13 +81,20 @@ class CLIInterface(TimerObserver):
     def get_user_pasta_choice(self) -> str:
         """Get user's pasta selection"""
         pasta_list = self.display_pasta_options()
+        back_option_num = len(pasta_list) + 1
+        
+        print(f"{back_option_num}. ← Back to Main Menu")
+        print("=" * 50)
+        
         while True:
             try:
-                choice = int(input("Enter the number of your pasta choice: "))
-                if 1 <= choice <= len(pasta_list):
+                choice = int(input(f"Enter the number of your choice (1-{back_option_num}): "))
+                if choice == back_option_num:
+                    return None  # Indicate user wants to go back
+                elif 1 <= choice <= len(pasta_list):
                     return pasta_list[choice - 1].name
                 else:
-                    print(f"Please enter a number between 1 and {len(pasta_list)}")
+                    print(f"Please enter a number between 1 and {back_option_num}")
             except ValueError:
                 print("Please enter a valid number!")
     
@@ -120,6 +127,9 @@ class CLIInterface(TimerObserver):
     def start_new_timer(self) -> None:
         """Start a new concurrent timer"""
         selected_pasta = self.get_user_pasta_choice()
+        if selected_pasta is None:  # User chose to go back
+            return
+            
         cooking_time = self.get_cooking_time(selected_pasta)
         
         # Create and start the timer
@@ -145,40 +155,49 @@ class CLIInterface(TimerObserver):
             input("Press Enter to continue...")
             return
         
-        print("\n🕐 Active Timers")
-        print("=" * 60)
-        
-        for timer in active_timers:
-            status_emoji = {
-                'running': '🔥',
-                'paused': '⏸️',
-                'finished': '✅',
-                'cancelled': '❌',
-                'error': '⚠️'
-            }.get(timer['status'], '❓')
-            
-            elapsed = datetime.now() - timer['start_time']
-            
-            if timer['status'] in ['running', 'paused']:
-                remaining_time = timedelta(seconds=timer['remaining_seconds'])
-                status_text = " (PAUSED)" if timer['status'] == 'paused' else ""
-                print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()}{status_text}")
-                print(f"   Time remaining: {remaining_time}")
-                print(f"   Elapsed: {elapsed}")
-            else:
-                print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()} - {timer['status'].upper()}")
-                print(f"   Total time: {elapsed}")
-            print()
-        
-        print("=" * 60)
-        
-        # Offer management options
         while True:
-            action = input("Actions: (p)ause/resume, (c)ancel timer, (r)emove finished, (b)ack to menu: ").strip().lower()
+            print("\n🕐 Active Timers")
+            print("=" * 60)
             
-            if action == 'b':
+            for timer in active_timers:
+                status_emoji = {
+                    'running': '🔥',
+                    'paused': '⏸️',
+                    'finished': '✅',
+                    'cancelled': '❌',
+                    'error': '⚠️'
+                }.get(timer['status'], '❓')
+                
+                elapsed = datetime.now() - timer['start_time']
+                
+                if timer['status'] in ['running', 'paused']:
+                    remaining_time = timedelta(seconds=timer['remaining_seconds'])
+                    status_text = " (PAUSED)" if timer['status'] == 'paused' else ""
+                    print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()}{status_text}")
+                    print(f"   Time remaining: {remaining_time}")
+                    print(f"   Elapsed: {elapsed}")
+                else:
+                    print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()} - {timer['status'].upper()}")
+                    print(f"   Total time: {elapsed}")
+                print()
+            
+            print("=" * 60)
+            print("1. Pause/Resume Timer")
+            print("2. Cancel Timer") 
+            print("3. Remove Finished Timers")
+            print("4. ← Back to Main Menu")
+            print("=" * 60)
+            
+            # Get user choice
+            while True:
+                choice = input("Select an option (1-4): ").strip()
+                if choice in ["1", "2", "3", "4"]:
+                    break
+                print("Please enter a number between 1 and 4.")
+            
+            if choice == "4":
                 break
-            elif action == 'p':
+            elif choice == "1":
                 timer_id = input("Enter timer ID to pause/resume: ").strip()
                 active_timers = self.timer_manager.get_active_timers()
                 timer = next((t for t in active_timers if t['id'] == timer_id), None)
@@ -197,22 +216,55 @@ class CLIInterface(TimerObserver):
                         print(f"❌ Failed to resume timer {timer_id}")
                 else:
                     print(f"❌ Timer {timer_id} cannot be paused/resumed (status: {timer['status']})")
-            elif action == 'c':
+                
+                input("Press Enter to continue...")
+                active_timers = self.timer_manager.get_active_timers()  # Refresh the list
+                
+            elif choice == "2":
                 timer_id = input("Enter timer ID to cancel: ").strip()
                 if self.timer_manager.cancel_timer(timer_id):
                     print(f"✅ Timer {timer_id} cancelled")
                 else:
                     print(f"❌ Timer {timer_id} not found")
-            elif action == 'r':
+                
+                input("Press Enter to continue...")
+                active_timers = self.timer_manager.get_active_timers()  # Refresh the list
+                
+            elif choice == "3":
                 self.timer_manager.cleanup_finished_timers()
                 print("✅ Finished timers removed")
-                break
-            else:
-                print("Please enter 'p', 'c', 'r', or 'b'")
+                input("Press Enter to continue...")
+                active_timers = self.timer_manager.get_active_timers()  # Refresh the list
     
     def monitor_all_timers(self) -> None:
         """Real-time monitoring of all active timers"""
-        print("\n🔍 Monitoring Mode - Press Ctrl+C to return to menu")
+        active_timers = self.timer_manager.get_active_timers()
+        active_running_timers = [t for t in active_timers if t['status'] in ['running', 'paused']]
+        
+        if not active_running_timers:
+            print("\n📭 No active timers to monitor")
+            input("Press Enter to continue...")
+            return
+        
+        print("\n🔍 Monitor All Timers")
+        print("=" * 60)
+        print("1. Start Real-time Monitoring")
+        print("2. ← Back to Main Menu")
+        print("=" * 60)
+        
+        while True:
+            choice = input("Select an option (1-2): ").strip()
+            if choice in ["1", "2"]:
+                break
+            print("Please enter 1 or 2.")
+        
+        if choice == "2":
+            return
+            
+        # Start monitoring mode
+        print("\n🔍 Real-time Monitoring Mode")
+        print("Monitoring will update every second...")
+        print("Press Ctrl+C to stop monitoring and return to menu")
         time.sleep(2)
         
         self.monitoring_active = True
@@ -266,6 +318,21 @@ class CLIInterface(TimerObserver):
         """Interactive process to add custom pasta"""
         print("\n🌟 Add Custom Pasta Type")
         print("-" * 30)
+        print("1. Continue with Adding Pasta")
+        print("2. ← Back to Main Menu")
+        print("-" * 30)
+        
+        while True:
+            choice = input("Select an option (1-2): ").strip()
+            if choice in ["1", "2"]:
+                break
+            print("Please enter 1 or 2.")
+        
+        if choice == "2":
+            return
+        
+        print("\n📝 Enter Pasta Details:")
+        print("-" * 25)
         
         while True:
             name = input("Enter pasta name: ").strip()
@@ -309,6 +376,8 @@ class CLIInterface(TimerObserver):
                 print(f"❌ Error: {e}")
         else:
             print("❌ Pasta type not saved.")
+        
+        input("Press Enter to continue...")
     
     def manage_custom_pasta_interactive(self) -> None:
         """Interactive process to manage custom pasta"""
@@ -399,10 +468,21 @@ class CLIInterface(TimerObserver):
         # Increment usage count for custom pasta
         self.pasta_db.increment_pasta_usage(event.pasta_type)
         
+        # Play sound notification (if available)
         if self.sound_notifier.play_notification():
-            print("🔔 Sound notification played!")
+            pass  # Sound is now playing in background process
         else:
             print("(Install 'playsound3' for sound notifications)")
+        
+        # Wait for user to dismiss the timer finished message
+        input("\nPress Enter to continue...")
+        
+        # Stop the sound notification when user dismisses the message
+        self.sound_notifier.stop_notification()
+        
+        # If we're in monitoring mode, exit it to return to main menu
+        if self.monitoring_active:
+            self.monitoring_active = False
     
     def on_timer_cancelled(self, event: TimerEvent) -> None:
         """Handle timer cancellation"""
