@@ -13,6 +13,12 @@ try:
 except ImportError:
     SOUND_AVAILABLE = False
 
+try:
+    from plyer import notification
+    DESKTOP_NOTIFICATIONS_AVAILABLE = True
+except ImportError:
+    DESKTOP_NOTIFICATIONS_AVAILABLE = False
+
 
 class TimerObserver(ABC):
     """Abstract base class for timer observers"""
@@ -276,22 +282,74 @@ class TimerManager:
                 del self.active_timers[timer_id]
 
 
-class SoundNotifier:
-    """Handles sound notifications using multiprocessing for better control"""
+class NotificationManager:
+    """Handles both sound and desktop notifications"""
     
     def __init__(self, sound_file: str = "alarm.mp3"):
         self.sound_file = sound_file
-        self.enabled = SOUND_AVAILABLE
+        self.sound_enabled = SOUND_AVAILABLE
+        self.desktop_enabled = DESKTOP_NOTIFICATIONS_AVAILABLE
         self.sound_process = None
     
-    def play_notification(self) -> bool:
+    def show_notification(self, title: str, message: str, pasta_type: str = "", play_sound: bool = True) -> Dict[str, bool]:
+        """Show both desktop and sound notifications. Returns status of each notification type."""
+        results = {
+            'desktop': False,
+            'sound': False
+        }
+        
+        # Show desktop notification
+        results['desktop'] = self._show_desktop_notification(title, message, pasta_type)
+        
+        # Play sound notification
+        if play_sound:
+            results['sound'] = self._play_sound_notification()
+        
+        return results
+    
+    def _show_desktop_notification(self, title: str, message: str, pasta_type: str = "") -> bool:
+        """Show desktop notification. Returns True if successful."""
+        if not self.desktop_enabled:
+            return False
+        
+        try:
+            # Choose an appropriate icon based on pasta type or use default
+            app_icon = self._get_notification_icon(pasta_type)
+            
+            notification.notify(
+                title=title,
+                message=message,
+                app_name="Pasta Timer",
+                app_icon=app_icon,
+                timeout=10,  # Show for 10 seconds
+                toast=True   # Use toast notification on Windows
+            )
+            return True
+        except Exception as e:
+            # Fail silently - desktop notifications are not critical
+            return False
+    
+    def _get_notification_icon(self, pasta_type: str = "") -> Optional[str]:
+        """Get appropriate notification icon based on pasta type or return None for default."""
+        # You can add custom icons here based on pasta type
+        # For now, return None to use system default
+        # In the future, you could add pasta-specific icons like:
+        # icon_map = {
+        #     'spaghetti': 'icons/spaghetti.png',
+        #     'penne': 'icons/penne.png',
+        #     # ... etc
+        # }
+        # return icon_map.get(pasta_type.lower(), None)
+        return None
+    
+    def _play_sound_notification(self) -> bool:
         """Play notification sound in a separate process. Returns True if successful."""
-        if not self.enabled:
+        if not self.sound_enabled:
             return False
         
         try:
             # Stop any currently playing sound
-            self.stop_notification()
+            self.stop_sound()
             # Start new sound process
             self.sound_process = multiprocessing.Process(target=playsound, args=(self.sound_file,))
             self.sound_process.start()
@@ -299,8 +357,28 @@ class SoundNotifier:
         except Exception:
             return False
     
-    def stop_notification(self) -> None:
+    def stop_sound(self) -> None:
         """Stop the currently playing notification sound."""
         if self.sound_process and self.sound_process.is_alive():
             self.sound_process.terminate()
             self.sound_process.join(timeout=1.0)  # Wait up to 1 second for clean termination
+    
+    def get_capabilities(self) -> Dict[str, bool]:
+        """Get available notification capabilities."""
+        return {
+            'desktop_notifications': self.desktop_enabled,
+            'sound_notifications': self.sound_enabled
+        }
+    
+    # Backward compatibility methods
+    def play_notification(self) -> bool:
+        """Legacy method for backward compatibility. Use show_notification instead."""
+        return self._play_sound_notification()
+    
+    def stop_notification(self) -> None:
+        """Legacy method for backward compatibility. Use stop_sound instead."""
+        self.stop_sound()
+
+
+# Backward compatibility alias
+SoundNotifier = NotificationManager

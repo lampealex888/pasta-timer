@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from models import PastaInfo, TimerEvent
 from pasta_database import PastaDatabase
-from timer import TimerObserver, PastaTimer, TimerManager, SoundNotifier
+from timer import TimerObserver, PastaTimer, TimerManager, NotificationManager
 from validators import CustomPastaValidator
 
 class CLIInterface(TimerObserver):
@@ -14,12 +14,17 @@ class CLIInterface(TimerObserver):
     def __init__(self, pasta_db: PastaDatabase, debug_mode: bool = False):
         self.pasta_db = pasta_db
         self.debug_mode = debug_mode
-        self.sound_notifier = SoundNotifier()
+        self.notification_manager = NotificationManager()
         self.timer_manager = TimerManager()
         self.current_facts: Dict[str, str] = {}  # timer_id -> fact
         self.display_mode = 'menu'  # 'menu' or 'monitoring'
         self.monitoring_active = False
         self.last_screen_update = time.time()
+        
+        # Show notification capabilities on startup
+        capabilities = self.notification_manager.get_capabilities()
+        if self.debug_mode:
+            print(f"🔧 Notification capabilities: Desktop={capabilities['desktop_notifications']}, Sound={capabilities['sound_notifications']}")
     
     def display_main_menu(self) -> str:
         """Display main menu and get user choice"""
@@ -142,6 +147,19 @@ class CLIInterface(TimerObserver):
         
         if self.timer_manager.start_timer(timer_id, self):
             print("✅ Timer started successfully!")
+            
+            # Show desktop notification for timer start
+            time_text = f"{int(cooking_time)} minute{'s' if cooking_time != 1 else ''}"
+            if cooking_time != int(cooking_time):  # Has decimal part
+                time_text = f"{cooking_time:.1f} minutes"
+            
+            self.notification_manager.show_notification(
+                title="🍝 Pasta Timer - Started",
+                message=f"{selected_pasta.title()} timer started ({time_text})",
+                pasta_type=selected_pasta,
+                play_sound=False  # Don't play sound for start
+            )
+            
             time.sleep(2)
         else:
             print("❌ Failed to start timer")
@@ -468,17 +486,31 @@ class CLIInterface(TimerObserver):
         # Increment usage count for custom pasta
         self.pasta_db.increment_pasta_usage(event.pasta_type)
         
-        # Play sound notification (if available)
-        if self.sound_notifier.play_notification():
-            pass  # Sound is now playing in background process
-        else:
-            print("(Install 'playsound3' for sound notifications)")
+        # Show desktop and sound notifications
+        notification_title = "🍝 Pasta Timer"
+        notification_message = f"Your {event.pasta_type.title()} is ready! Time to taste test! 👨‍🍳"
+        
+        results = self.notification_manager.show_notification(
+            title=notification_title,
+            message=notification_message,
+            pasta_type=event.pasta_type,
+            play_sound=True
+        )
+        
+        # Show status of notifications
+        if results['desktop']:
+            print("📱 Desktop notification sent!")
+        elif not self.notification_manager.get_capabilities()['desktop_notifications']:
+            print("📱 (Install 'plyer' for desktop notifications)")
+        
+        if not results['sound'] and not self.notification_manager.get_capabilities()['sound_notifications']:
+            print("🔊 (Install 'playsound3' for sound notifications)")
         
         # Wait for user to dismiss the timer finished message
         input("\nPress Enter to continue...")
         
         # Stop the sound notification when user dismisses the message
-        self.sound_notifier.stop_notification()
+        self.notification_manager.stop_sound()
         
         # If we're in monitoring mode, exit it to return to main menu
         if self.monitoring_active:
@@ -487,14 +519,46 @@ class CLIInterface(TimerObserver):
     def on_timer_cancelled(self, event: TimerEvent) -> None:
         """Handle timer cancellation"""
         print(f"\n⏹️ Timer for {event.pasta_type.title()} was cancelled")
+        
+        # Show desktop notification for cancellation
+        self.notification_manager.show_notification(
+            title="🍝 Pasta Timer - Cancelled",
+            message=f"Timer for {event.pasta_type.title()} was cancelled",
+            pasta_type=event.pasta_type,
+            play_sound=False  # Don't play sound for cancellation
+        )
     
     def on_timer_paused(self, event: TimerEvent) -> None:
         """Handle timer pause"""
         print(f"\n⏸️ Timer for {event.pasta_type.title()} was paused")
+        
+        # Show desktop notification for pause
+        minutes = event.remaining_seconds // 60
+        seconds = event.remaining_seconds % 60
+        time_remaining = f"{minutes}:{seconds:02d}"
+        
+        self.notification_manager.show_notification(
+            title="🍝 Pasta Timer - Paused",
+            message=f"{event.pasta_type.title()} timer paused ({time_remaining} remaining)",
+            pasta_type=event.pasta_type,
+            play_sound=False  # Don't play sound for pause
+        )
     
     def on_timer_resumed(self, event: TimerEvent) -> None:
         """Handle timer resume"""
         print(f"\n▶️ Timer for {event.pasta_type.title()} was resumed")
+        
+        # Show desktop notification for resume
+        minutes = event.remaining_seconds // 60
+        seconds = event.remaining_seconds % 60
+        time_remaining = f"{minutes}:{seconds:02d}"
+        
+        self.notification_manager.show_notification(
+            title="🍝 Pasta Timer - Resumed",
+            message=f"{event.pasta_type.title()} timer resumed ({time_remaining} remaining)",
+            pasta_type=event.pasta_type,
+            play_sound=False  # Don't play sound for resume
+        )
     
     def _clear_screen(self) -> None:
         """Clear the terminal screen"""

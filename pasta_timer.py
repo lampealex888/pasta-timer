@@ -75,7 +75,7 @@ class PastaTimerApp:
             print("🛑 All running timers cancelled.")
 
         # Stop any sound notifications
-        self.cli.sound_notifier.stop_notification()
+        self.cli.notification_manager.stop_sound()
         
         print("👋 Thanks for using Pasta Timer! Goodbye!")
         return True
