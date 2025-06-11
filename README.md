@@ -51,8 +51,16 @@ This installs Streamlit and any other packages the app needs.
 
 ### Command Line Version:
 ```bash
-python pasta_timer.py
+python pasta_timer.py              # Normal mode
+python pasta_timer.py --debug      # Debug mode (6 second timers)
+python pasta_timer.py --help       # Show help and options
+python pasta_timer.py --version    # Show version
 ```
+
+**Available command-line options:**
+- `--debug, -d`: Enable debug mode (all timers run for 6 seconds only)
+- `--help, -h`: Show help message and available options
+- `--version, -v`: Display the application version
 
 ### Web Version (Streamlit):
 ```bash

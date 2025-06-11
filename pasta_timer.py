@@ -1,5 +1,8 @@
+import argparse
 from pasta_database import PastaDatabase
 from cli_interface import CLIInterface
+
+__version__ = "1.0.0"
 
 class PastaTimerApp:
     """Main application class that orchestrates the pasta timer"""
@@ -77,13 +80,36 @@ class PastaTimerApp:
 def main():
     """Entry point for the pasta timer application"""
     
-    # Debug mode: set to True to make all timers last only 6 seconds
-    DEBUG_MODE = False  # Change to True for testing
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="🍝 Pasta Timer - Never overcook your pasta again!",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python pasta_timer.py              # Normal mode
+  python pasta_timer.py --debug      # Debug mode (6 second timers)
+  python pasta_timer.py -d           # Debug mode (short form)
+        """
+    )
     
-    if DEBUG_MODE:
+    parser.add_argument(
+        "-d", "--debug",
+        action="store_true",
+        help="Enable debug mode (all timers will run for 6 seconds only)"
+    )
+    
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version=f"Pasta Timer {__version__}"
+    )
+    
+    args = parser.parse_args()
+    
+    if args.debug:
         print("🔧 DEBUG MODE: All timers will run for 6 seconds only")
     
-    app = PastaTimerApp(debug_mode=DEBUG_MODE)
+    app = PastaTimerApp(debug_mode=args.debug)
     app.run()
 
 
