@@ -30,6 +30,16 @@ class TimerObserver(ABC):
     def on_timer_cancelled(self, event: TimerEvent) -> None:
         """Called when timer is cancelled"""
         pass
+    
+    @abstractmethod
+    def on_timer_paused(self, event: TimerEvent) -> None:
+        """Called when timer is paused"""
+        pass
+    
+    @abstractmethod
+    def on_timer_resumed(self, event: TimerEvent) -> None:
+        """Called when timer is resumed"""
+        pass
 
 
 class PastaTimer:
@@ -43,6 +53,8 @@ class PastaTimer:
         self.observers: List[TimerObserver] = []
         self.total_seconds = int(minutes * 60) if not debug_mode else 6
         self.remaining_seconds = self.total_seconds
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # Start unpaused
     
     def add_observer(self, observer: TimerObserver) -> None:
         """Add an observer to receive timer events"""
@@ -65,19 +77,30 @@ class PastaTimer:
                     observer.on_timer_finished(event)
                 elif event_type == "cancelled":
                     observer.on_timer_cancelled(event)
+                elif event_type == "paused":
+                    observer.on_timer_paused(event)
+                elif event_type == "resumed":
+                    observer.on_timer_resumed(event)
             except Exception as e:
                 # Don't let observer errors crash the timer
                 print(f"Observer error: {e}")
     
     def start(self) -> None:
         """Start the timer countdown"""
-        if self.state != TimerState.IDLE:
+        if self.state not in [TimerState.IDLE, TimerState.PAUSED]:
             raise ValueError(f"Timer cannot be started from state: {self.state}")
         
         self.state = TimerState.RUNNING
         
         try:
-            while self.remaining_seconds > 0 and self.state == TimerState.RUNNING:
+            while self.remaining_seconds > 0 and self.state in [TimerState.RUNNING, TimerState.PAUSED]:
+                # Wait if paused
+                self._pause_event.wait()
+                
+                # Check if state changed while waiting
+                if self.state != TimerState.RUNNING:
+                    continue
+                
                 self._notify_observers("tick")
                 time.sleep(1)
                 self.remaining_seconds -= 1
@@ -88,16 +111,32 @@ class PastaTimer:
         except KeyboardInterrupt:
             self.cancel()
     
+    def pause(self) -> None:
+        """Pause the timer"""
+        if self.state == TimerState.RUNNING:
+            self.state = TimerState.PAUSED
+            self._pause_event.clear()
+            self._notify_observers("paused")
+    
+    def resume(self) -> None:
+        """Resume the timer from paused state"""
+        if self.state == TimerState.PAUSED:
+            self.state = TimerState.RUNNING
+            self._pause_event.set()
+            self._notify_observers("resumed")
+    
     def cancel(self) -> None:
         """Cancel the timer"""
-        if self.state == TimerState.RUNNING:
+        if self.state in [TimerState.RUNNING, TimerState.PAUSED]:
             self.state = TimerState.CANCELLED
+            self._pause_event.set()  # Unblock if paused
             self._notify_observers("cancelled")
     
     def reset(self) -> None:
         """Reset the timer to initial state"""
         self.state = TimerState.IDLE
         self.remaining_seconds = self.total_seconds
+        self._pause_event.set()  # Ensure unpaused
 
 
 class TimerManager:
@@ -147,6 +186,8 @@ class TimerManager:
                                 timer_info['status'] = 'finished'
                             elif timer_info['timer'].state.name == 'CANCELLED':
                                 timer_info['status'] = 'cancelled'
+                            elif timer_info['timer'].state.name == 'PAUSED':
+                                timer_info['status'] = 'paused'
                 except Exception as e:
                     with self.lock:
                         if timer_id in self.active_timers:
@@ -156,6 +197,32 @@ class TimerManager:
             timer_info['thread'] = threading.Thread(target=run_timer, daemon=True)
             timer_info['thread'].start()
             return True
+    
+    def pause_timer(self, timer_id: str) -> bool:
+        """Pause a specific timer"""
+        with self.lock:
+            if timer_id not in self.active_timers:
+                return False
+            
+            timer_info = self.active_timers[timer_id]
+            if timer_info['status'] == 'running':
+                timer_info['timer'].pause()
+                timer_info['status'] = 'paused'
+                return True
+            return False
+    
+    def resume_timer(self, timer_id: str) -> bool:
+        """Resume a specific timer"""
+        with self.lock:
+            if timer_id not in self.active_timers:
+                return False
+            
+            timer_info = self.active_timers[timer_id]
+            if timer_info['status'] == 'paused':
+                timer_info['timer'].resume()
+                timer_info['status'] = 'running'
+                return True
+            return False
     
     def cancel_timer(self, timer_id: str) -> bool:
         """Cancel a specific timer"""

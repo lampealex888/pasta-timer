@@ -24,12 +24,23 @@ class CLIInterface(TimerObserver):
     def display_main_menu(self) -> str:
         """Display main menu and get user choice"""
         active_timers = self.timer_manager.get_active_timers()
-        active_count = len([t for t in active_timers if t['status'] == 'running'])
+        running_count = len([t for t in active_timers if t['status'] == 'running'])
+        paused_count = len([t for t in active_timers if t['status'] == 'paused'])
+        total_active = running_count + paused_count
+        
+        status_text = ""
+        if total_active > 0:
+            if paused_count > 0:
+                status_text = f"{running_count} running, {paused_count} paused"
+            else:
+                status_text = f"{running_count} running"
+        else:
+            status_text = "0 active"
         
         print("\n🍝 Welcome to the Pasta Timer! 🍝")
         print("=" * 45)
         print(f"1. Start New Timer")
-        print(f"2. View Active Timers ({active_count} running)")
+        print(f"2. View Active Timers ({status_text})")
         print(f"3. Monitor All Timers")
         print(f"4. Add Custom Pasta Type")
         print(f"5. Manage Custom Pasta Types")
@@ -140,6 +151,7 @@ class CLIInterface(TimerObserver):
         for timer in active_timers:
             status_emoji = {
                 'running': '🔥',
+                'paused': '⏸️',
                 'finished': '✅',
                 'cancelled': '❌',
                 'error': '⚠️'
@@ -147,9 +159,10 @@ class CLIInterface(TimerObserver):
             
             elapsed = datetime.now() - timer['start_time']
             
-            if timer['status'] == 'running':
+            if timer['status'] in ['running', 'paused']:
                 remaining_time = timedelta(seconds=timer['remaining_seconds'])
-                print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()}")
+                status_text = " (PAUSED)" if timer['status'] == 'paused' else ""
+                print(f"{status_emoji} {timer['id']}: {timer['pasta_type'].title()}{status_text}")
                 print(f"   Time remaining: {remaining_time}")
                 print(f"   Elapsed: {elapsed}")
             else:
@@ -161,10 +174,29 @@ class CLIInterface(TimerObserver):
         
         # Offer management options
         while True:
-            action = input("Actions: (c)ancel timer, (r)emove finished, (b)ack to menu: ").strip().lower()
+            action = input("Actions: (p)ause/resume, (c)ancel timer, (r)emove finished, (b)ack to menu: ").strip().lower()
             
             if action == 'b':
                 break
+            elif action == 'p':
+                timer_id = input("Enter timer ID to pause/resume: ").strip()
+                active_timers = self.timer_manager.get_active_timers()
+                timer = next((t for t in active_timers if t['id'] == timer_id), None)
+                
+                if not timer:
+                    print(f"❌ Timer {timer_id} not found")
+                elif timer['status'] == 'running':
+                    if self.timer_manager.pause_timer(timer_id):
+                        print(f"⏸️ Timer {timer_id} paused")
+                    else:
+                        print(f"❌ Failed to pause timer {timer_id}")
+                elif timer['status'] == 'paused':
+                    if self.timer_manager.resume_timer(timer_id):
+                        print(f"▶️ Timer {timer_id} resumed")
+                    else:
+                        print(f"❌ Failed to resume timer {timer_id}")
+                else:
+                    print(f"❌ Timer {timer_id} cannot be paused/resumed (status: {timer['status']})")
             elif action == 'c':
                 timer_id = input("Enter timer ID to cancel: ").strip()
                 if self.timer_manager.cancel_timer(timer_id):
@@ -176,7 +208,7 @@ class CLIInterface(TimerObserver):
                 print("✅ Finished timers removed")
                 break
             else:
-                print("Please enter 'c', 'r', or 'b'")
+                print("Please enter 'p', 'c', 'r', or 'b'")
     
     def monitor_all_timers(self) -> None:
         """Real-time monitoring of all active timers"""
@@ -197,17 +229,17 @@ class CLIInterface(TimerObserver):
         """Display the monitoring screen"""
         self._clear_screen()
         active_timers = self.timer_manager.get_active_timers()
-        running_timers = [t for t in active_timers if t['status'] == 'running']
+        active_running_timers = [t for t in active_timers if t['status'] in ['running', 'paused']]
         
         print("🔍 PASTA TIMER MONITORING")
         print("=" * 60)
         
-        if not running_timers:
+        if not active_running_timers:
             print("📭 No active timers running")
             print("\nPress Ctrl+C to return to menu")
             return
         
-        for timer in running_timers:
+        for timer in active_running_timers:
             minutes = timer['remaining_seconds'] // 60
             seconds = timer['remaining_seconds'] % 60
             timer_display = f"{minutes:02d}:{seconds:02d}"
@@ -219,7 +251,10 @@ class CLIInterface(TimerObserver):
             
             fact = self.current_facts.get(timer['id'], "Cooking pasta is an art! 🎨")
             
-            print(f"🍝 {timer['pasta_type'].title()} ({timer['id']})")
+            status_emoji = '⏸️' if timer['status'] == 'paused' else '🔥'
+            status_text = " (PAUSED)" if timer['status'] == 'paused' else ""
+            
+            print(f"{status_emoji} {timer['pasta_type'].title()} ({timer['id']}){status_text}")
             print(f"⏰ Time remaining: {timer_display}")
             print(progress_bar)
             print(f"💡 {fact}")
@@ -372,6 +407,14 @@ class CLIInterface(TimerObserver):
     def on_timer_cancelled(self, event: TimerEvent) -> None:
         """Handle timer cancellation"""
         print(f"\n⏹️ Timer for {event.pasta_type.title()} was cancelled")
+    
+    def on_timer_paused(self, event: TimerEvent) -> None:
+        """Handle timer pause"""
+        print(f"\n⏸️ Timer for {event.pasta_type.title()} was paused")
+    
+    def on_timer_resumed(self, event: TimerEvent) -> None:
+        """Handle timer resume"""
+        print(f"\n▶️ Timer for {event.pasta_type.title()} was resumed")
     
     def _clear_screen(self) -> None:
         """Clear the terminal screen"""
